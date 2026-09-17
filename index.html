@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maha AI Olympiad - Attendance Register to Student Template Generator</title>
+  <script src="theme.js"></script>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#F0FDFA',
+              100: '#CCFBF1',
+              200: '#99F6E4',
+              500: '#14B8A6',
+              600: '#0D9488',
+              700: '#0F766E',
+              800: '#115E59',
+              900: '#134E4A',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  
+  <!-- SheetJS (xlsx) for client-side Excel export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col antialiased">
+  <header class="bg-white border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <span class="brand-mark" aria-hidden="true"><svg width="27" height="30" viewBox="0 0 27 30" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="2" width="20" height="26" rx="2"/><path d="M9 2v26M1 8h6M1 15h6M1 22h6M13 9h7M13 14h7M13 19h5"/></svg></span>
+        <span><span class="block font-bold text-base tracking-tight">Maha AI Olympiad</span><span class="block text-xs text-slate-500 mt-0.5">Register Scanner</span></span>
+      </div>
+      <div class="flex items-center gap-3">
+        <label class="text-xs text-slate-500 flex items-center gap-2" for="theme-select">Theme
+          <select id="theme-select" class="compact-select" aria-label="Color theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
+        </label>
+        <button id="settings-btn" class="quiet-button">Settings</button>
+        <details class="app-menu"><summary aria-label="Workspace menu" title="Workspace menu">•••</summary><div class="menu-panel bg-white border border-slate-200"><button id="reset-workspace-btn" class="quiet-button text-red-600">Start over</button></div></details>
+      </div>
+    </div>
+  </header>
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8">
+    <nav class="steps" aria-label="Register workflow">
+      <button data-step="upload" class="step" aria-current="step"><span>01</span> Upload</button><i aria-hidden="true"></i>
+      <button data-step="review" class="step" disabled><span>02</span> Review</button><i aria-hidden="true"></i>
+      <button data-step="download" class="step" disabled><span>03</span> Download</button>
+    </nav>
+    <section id="upload-prompt" class="upload-stage">
+      <div class="upload-intro"><p class="eyebrow" lang="mr">विद्यार्थी नोंदवही</p><h1>Start with<br>your register.</h1><p class="intro-description">Upload your pages, check the details, and download your student list.</p><dl class="register-notes"><div><dt>Languages</dt><dd>Marathi &amp; English</dd></div><div><dt>Documents</dt><dd>Handwritten or printed</dd></div></dl><p class="photo-note">A small tip: keep the whole page in the frame, with the names and class heading clearly visible.</p></div>
+      <div id="dropzone" class="dropzone upload-zone bg-white border-slate-300">
+        <svg class="register-drawing" viewBox="0 0 360 200" fill="none" aria-hidden="true"><g stroke="currentColor" stroke-width="1"><path d="M180 21C145 8 57 9 15 14v171c53-5 119-4 165 5 46-9 112-10 165-5V14c-42-5-130-6-165 7Z"/><path d="M180 21v169M8 20H5v170c63-3 118-2 175 6 57-8 112-9 175-6V20h-3"/><path d="M22 43h316v130H22ZM52 43v130M228 43v130M285 43v130"/><path d="M22 61h316"/><path d="M22 77h316"/><path d="M22 93h316"/><path d="M22 109h316"/><path d="M22 125h316"/><path d="M22 141h316"/><path d="M22 157h316"/></g><g class="register-title"><text x="28" y="56">अ.क्र.</text><text x="75" y="56">विद्यार्थ्याचे नाव</text><text x="239" y="56">हजेरी</text><text x="303" y="56">शेरा</text></g></svg>
+        <h2 class="text-xl font-bold">Add your register pages</h2>
+        <p class="text-sm text-slate-500 mt-2 mb-6">Drag photos or a PDF into this area.</p>
+        <div class="flex flex-wrap items-center justify-center gap-3">
+          <button id="choose-files-btn" class="primary-button">Choose files</button>
+          <button id="take-photo-btn" class="secondary-button">Take photo</button>
+        </div>
+        <input id="file-input" type="file" multiple accept="image/*,application/pdf,.pdf" class="hidden">
+        <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden">
+        <p class="text-xs text-slate-400 mt-6">JPG, PNG, WebP or PDF</p>
+        <p class="text-xs text-slate-400 mt-2">Up to 50 MB and 100 pages per PDF</p>
+      </div>
+      <div id="upload-queue" class="hidden queue-card bg-white border border-slate-200">
+        <div class="flex items-center justify-between gap-3 mb-4"><h2 id="queue-count" class="font-semibold"></h2><span class="text-xs text-slate-500">Ready to scan</span></div>
+        <div id="page-previews" class="page-previews"></div>
+        <div class="flex flex-wrap items-center justify-between gap-3 mt-5"><p class="text-xs text-slate-500">Check your pages before starting.</p><button id="scan-pending-btn" class="primary-button">Scan register →</button></div>
+      </div>
+      <div class="demo-row"><span>First time here?</span><button id="load-demo-btn" class="demo-link">See how it works with a sample</button></div>
+      <div class="text-center mt-4"><button id="return-review-btn" class="quiet-button hidden">Back to your student list →</button></div>
+    </section>
+    <section id="review-stage" class="hidden">
+      <div class="review-heading"><div><p class="eyebrow">Review your register</p><h1>A second look.</h1><p class="text-sm text-slate-500 mt-2">Compare with the original. Click any student detail to edit it.</p></div><div class="flex gap-2"><button id="header-upload-btn" class="secondary-button">Add pages</button><button id="go-download-btn" class="primary-button">Download →</button></div></div>
+      <div id="workspace" class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      <!-- ================= LEFT: IMAGE VIEWER ================= -->
+      <div class="lg:col-span-5 min-w-0 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col review-panel overflow-hidden">
+        <!-- Viewer Header -->
+        <div class="p-3.5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-2">
+          <div class="flex-1 min-w-0 flex items-center gap-2">
+            <select id="image-selector" aria-label="Register page" class="min-w-0 w-full flex-1 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 truncate focus:outline-none focus:border-teal-600">
+              <!-- Populated by JS -->
+            </select>
+          </div>
+          
+          <!-- Zoom & Pan Controls -->
+          <div class="flex shrink-0 items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 shadow-2xs">
+            <button id="zoom-in" class="p-1 text-slate-600 hover:text-teal-700 hover:bg-slate-100 rounded" title="Zoom In">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            </button>
+            <button id="zoom-out" class="p-1 text-slate-600 hover:text-teal-700 hover:bg-slate-100 rounded" title="Zoom Out">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg>
+            </button>
+            <button id="zoom-reset" class="p-1 text-slate-600 hover:text-teal-700 hover:bg-slate-100 rounded text-[11px] font-bold px-1" title="Reset View">
+              100%
+            </button>
+            <button id="zoom-rotate" class="p-1 text-slate-600 hover:text-teal-700 hover:bg-slate-100 rounded" title="Rotate 90°">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Active Page Class Quick-Bar -->
+        <div class="px-3.5 py-2 bg-teal-50/80 border-b border-teal-100 flex items-center justify-between gap-2 text-xs">
+          <div class="flex items-center gap-1.5 font-medium text-teal-900">
+            <svg class="w-3.5 h-3.5 text-teal-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            <span>Class for this page</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <select id="page-class-select" aria-label="Class for this page" class="text-xs font-bold text-teal-900 bg-white border border-teal-300 rounded px-2 py-1 shadow-2xs focus:outline-none focus:border-teal-700">
+              <option value="">Choose class</option>
+              <option value="1">Class 1</option>
+              <option value="2">Class 2</option>
+              <option value="3">Class 3</option>
+              <option value="4">Class 4</option>
+              <option value="5">Class 5</option>
+              <option value="6">Class 6</option>
+              <option value="7">Class 7</option>
+              <option value="8">Class 8</option>
+              <option value="9">Class 9</option>
+              <option value="10">Class 10</option>
+              <option value="11">Class 11</option>
+              <option value="12">Class 12</option>
+            </select>
+            <button id="apply-page-class-btn" class="px-2.5 py-1 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded text-[11px] shadow-2xs transition-colors">
+              Apply to Page
+            </button>
+          </div>
+        </div>
+
+        <!-- Canvas Container -->
+        <div id="viewer-container" class="image-viewer-container flex-1 cursor-grab flex items-center justify-center p-4">
+          <img id="viewer-image" src="" alt="Register Preview" class="max-h-full object-contain pointer-events-none transition-transform duration-75">
+        </div>
+
+        <div class="p-2.5 bg-slate-50 border-t border-slate-200 text-center text-[11px] text-slate-500">
+          Drag to move the page · Scroll to zoom
+        </div>
+      </div>
+
+
+        <div class="lg:col-span-7 min-w-0 bg-white rounded-2xl border border-slate-200 flex flex-col review-panel">
+          <div class="p-4 border-b border-slate-200 space-y-3">
+            <div class="flex items-center justify-between gap-3"><h2 class="font-bold">Student list <span id="student-count-badge" class="ml-2 text-xs text-teal-800 bg-teal-50 rounded-full px-2 py-1">0 Students</span></h2><button id="add-student-btn" class="quiet-button">+ Add student</button></div>
+            <div class="flex flex-wrap items-center gap-3"><input id="search-input" type="search" aria-label="Search students" placeholder="Search students…" class="search-field bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm"><div id="class-filter-container" class="flex flex-wrap gap-1"></div></div>
+            <details id="more-options" class="more-options"><summary>More options <span class="text-slate-400 font-normal">Names, roll numbers &amp; class</span></summary>
+              <div class="options-grid">
+                <label>Roll numbers<select id="roll-format-select" class="compact-select"><option value="sequential_01">01, 02, 03…</option><option value="sequential_1">1, 2, 3…</option><option value="adm_no">Admission number</option></select></label>
+                <label>Class for selected class filter<select id="bulk-class-select" class="compact-select"><option value="">Choose class…</option><option value="1">Class 1</option><option value="2">Class 2</option><option value="3">Class 3</option><option value="4">Class 4</option><option value="5">Class 5</option><option value="6">Class 6</option><option value="7">Class 7</option><option value="8">Class 8</option><option value="9">Class 9</option><option value="10">Class 10</option><option value="11">Class 11</option><option value="12">Class 12</option></select></label>
+                <label>Default section<input id="default-section-input" value="A" maxlength="2" class="compact-select"></label>
+                <label class="checkbox-label"><input id="name-format-toggle" type="checkbox"> Include father's name</label>
+                <button id="toolbar-auto-dob-btn" class="quiet-button" title="Generate random class-based dates for missing birthdates">Generate missing birthdates</button>
+                <button id="copy-clipboard-btn" class="quiet-button">Copy table</button>
+              </div>
+            </details>
+          </div>
+          <div class="flex-1 overflow-auto"><table class="roster-table w-full text-left"><thead><tr><th>Roll</th><th>First name</th><th>Last name</th><th>Date of birth</th><th>Class</th><th>Section</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="roster-tbody"></tbody></table></div>
+          <div class="p-3 border-t border-slate-200 text-xs text-slate-500">Edits are included in your download.</div>
+        </div>
+      </div>
+    </section>
+    <section id="download-stage" class="hidden download-stage">
+      <div class="stage-heading"><p class="eyebrow">Download your list</p><h1>All in one place.</h1><p>Choose the file format you need.</p></div>
+      <div class="download-card bg-white border border-slate-200">
+        <div class="export-summary"><span id="download-count" class="export-count">0</span><div><strong>students included</strong><p id="download-pages" class="text-sm text-slate-500 mt-1"></p></div></div>
+        <p class="text-xs text-slate-500 mb-6">Includes the full student list, including rows hidden by search or class filters.</p>
+        <button id="export-xlsx-btn" class="format-button"><span class="file-badge">XLS</span><span class="flex-1 text-left"><strong>Excel spreadsheet</strong><small>Student import template · .xlsx</small></span><span aria-hidden="true">↓</span></button>
+        <button id="export-csv-btn" class="format-button"><span class="file-badge csv">CSV</span><span class="flex-1 text-left"><strong>CSV file</strong><small>For spreadsheets and other apps · .csv</small></span><span aria-hidden="true">↓</span></button>
+      </div>
+      <button id="back-review-btn" class="quiet-button mt-5">← Back to review</button>
+    </section>
+  </main>
+  <footer class="app-footer"><span>Maha AI Olympiad</span><span>Register scanner <span aria-hidden="true">/</span> School tools</span></footer>
+  <!-- ================= SETTINGS / API KEY MODAL ================= -->
+  <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-slate-900">Settings</h3>
+        <button id="close-settings-btn" class="text-slate-400 hover:text-slate-600">✕</button>
+      </div>
+
+      <p class="text-xs text-slate-500 mb-4">
+        This app uses Google Gemini Vision to accurately recognize and transliterate Marathi handwriting from attendance registers.
+      </p>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Google Gemini API Key</label>
+          <input id="api-key-input" type="password" placeholder="AIzaSy..." 
+                 class="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-mono focus:outline-none focus:border-teal-600 focus:bg-white">
+          <p class="text-[11px] text-slate-400 mt-1">
+            Don't have a key? Get one for free at <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-teal-700 underline font-medium">Google AI Studio</a>.
+          </p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Model Version <span class="text-slate-400 font-normal">(auto-detected)</span></label>
+          <select id="model-select" class="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:border-teal-600">
+            <option value="">Enter API key first — models will be auto-detected</option>
+          </select>
+          <p class="mt-1 text-[10px] text-slate-400">
+            Models are discovered automatically from your API key. The best available Flash model is selected by default.
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-6 flex items-center justify-between gap-2">
+        <button id="modal-try-demo-btn" class="px-3 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-50 rounded-lg transition-colors">
+          Try demo
+        </button>
+        <div class="flex items-center gap-2">
+          <button id="cancel-settings-btn" class="px-3 py-2 text-xs font-medium text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button id="save-settings-btn" class="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold rounded-lg transition-colors shadow-xs">
+            Save Settings
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= LOADING OVERLAY ================= -->
+  <div id="processing-overlay" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+    <div class="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl flex flex-col items-center">
+      <div class="w-12 h-12 border-4 border-teal-200 border-t-teal-700 rounded-full animate-spin mb-4"></div>
+      <h4 class="font-bold text-slate-800 text-base mb-1">Scanning Register</h4>
+      <p id="processing-text" class="text-xs text-slate-500 max-w-xs mb-4">
+        Analyzing handwriting and extracting student details...
+      </p>
+      <button id="cancel-processing-btn" class="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-slate-200 shadow-2xs">
+        Cancel Scan
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container"></div>
+
+  <!-- Load Sample Data and Main Application -->
+  <script src="sample-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

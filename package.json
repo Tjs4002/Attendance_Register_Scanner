@@ -1,0 +1,11 @@
+{
+  "name": "maha-ai-attendance-register-scanner",
+  "version": "1.0.0",
+  "description": "AI Attendance Register to Student Template Scanner for Maha AI Olympiad",
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "start": "node server.js",
+    "deploy:vercel": "npx vercel --prod",
+    "deploy:netlify": "npx netlify deploy --prod --dir=."
+  }
+}
