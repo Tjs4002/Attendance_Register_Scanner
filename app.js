@@ -626,27 +626,59 @@ async function handleFiles(files) {
     // Scanning starts only after the user has reviewed their uploaded pages.
 }
 
-// Excel/CSV files skip AI scanning: rows are read directly into the roster.
+// Excel/CSV rows are read directly into the roster. Sheets the column reader cannot
+// handle (unusual layout, Marathi names) are sent to Gemini as text when a key is set.
 async function importSpreadsheets(files) {
+    const controller = new AbortController();
+    state._abortController = controller;
+    let models = null;
     showProcessing(true, 'Reading spreadsheet...');
     try {
         for (const file of files) {
             try {
                 const result = await importExcelFile(file, state.defaultSection);
-                state.students.push(...result.students);
-                state.spreadsheetCount++;
+                const students = [...result.students];
+                let outOfRange = result.outOfRange;
                 const notes = [];
-                if (result.sheets > 1) notes.push(`${result.sheets} sheets combined`);
-                if (result.outOfRange) notes.push(`${result.outOfRange} outside classes 6-10 left out`);
-                if (result.duplicates) notes.push(`${result.duplicates} duplicate(s) skipped`);
-                if (result.skippedSheets.length) notes.push(`ignored sheet(s) without student names: ${result.skippedSheets.join(', ')}`);
-                if (result.students.length) showToast(`${file.name}: ${result.students.length} students imported${notes.length ? ' (' + notes.join('; ') + ')' : ''}.`, 'success');
-                else showToast(`${file.name}: no class 6-10 students found${notes.length ? ' (' + notes.join('; ') + ')' : ''}. Check that the sheet has a name column.`, 'warning');
+                if (result.aiSheets.length && state.apiKey && !controller.signal.aborted) {
+                    models = models || await prepareModels(controller.signal);
+                    const ai = await readSheetsWithAI(result.aiSheets, models, controller.signal);
+                    students.push(...ai.students);
+                    outOfRange += ai.outOfRange;
+                    if (ai.readSheets.length) notes.push(`AI read sheet(s): ${ai.readSheets.join(', ')}`);
+                    if (ai.failedSheets.length) notes.push(`AI could not read: ${ai.failedSheets.join(', ')}`);
+                } else if (result.aiSheets.length) {
+                    // Without AI, Marathi-name sheets still import as written; layout problems are skipped.
+                    result.aiSheets.forEach(sheet => students.push(...sheet.fallback));
+                    const names = result.aiSheets.map(sheet => sheet.name).join(', ');
+                    showToast(`${file.name}: sheet(s) ${names} need AI reading (unusual layout or Marathi names). Add your Gemini API key in Settings and upload the file again for best results.`, 'warning');
+                }
+                const roster = finalizeRoster(students);
+                // Same as scanned pages: fill birthdates the spreadsheet did not provide.
+                let generatedDobs = 0;
+                roster.students.forEach(student => {
+                    if (!student.dob) {
+                        student.dob = generateRandomDobForClass(student.studentClass || '6');
+                        generatedDobs++;
+                    }
+                });
+                state.students.push(...roster.students);
+                state.spreadsheetCount++;
+                if (result.sheets > 1) notes.unshift(`${result.sheets} sheets combined`);
+                if (outOfRange) notes.push(`${outOfRange} outside classes 6-10 left out`);
+                if (generatedDobs) notes.push(`${generatedDobs} missing birthdate(s) generated`);
+                if (roster.duplicates) notes.push(`${roster.duplicates} duplicate(s) skipped`);
+                if (result.skippedSheets.length) notes.push(`ignored empty sheet(s): ${result.skippedSheets.join(', ')}`);
+                const detail = notes.length ? ` (${notes.join('; ')})` : '';
+                if (roster.students.length) showToast(`${file.name}: ${roster.students.length} students imported${detail}.`, 'success');
+                else showToast(`${file.name}: no class 6-10 students found${detail}. Check that the sheet has a name column.`, 'warning');
             } catch (err) {
-                showToast(`Could not open ${file.name}: ${err.message}`, 'error');
+                if (err.name === 'AbortError') showToast(`${file.name}: import cancelled.`, 'info');
+                else showToast(`Could not open ${file.name}: ${err.message}`, 'error');
             }
         }
     } finally {
+        state._abortController = null;
         elements.fileInput.value = '';
         showProcessing(false);
     }
@@ -659,6 +691,35 @@ async function importSpreadsheets(files) {
     const missingClass = state.students.filter(student => !student.studentClass).length;
     if (missingClass) showToast(`${missingClass} student(s) have no class in the spreadsheet. Set it with “Class for selected class filter”.`, 'warning');
     window.scrollTo({ top: 0 });
+}
+
+// Sends each sheet to Gemini in chunks. A sheet that fails falls back to whatever the
+// column reader found; cancelling stops the whole import.
+async function readSheetsWithAI(sheets, models, signal) {
+    const out = { students: [], outOfRange: 0, readSheets: [], failedSheets: [] };
+    for (const sheet of sheets) {
+        try {
+            const chunks = sheetCsvChunks(sheet.csv);
+            const found = [];
+            let outOfRange = 0;
+            for (let i = 0; i < chunks.length; i++) {
+                const part = chunks.length > 1 ? ` (part ${i + 1} of ${chunks.length})` : '';
+                const rawText = await generateWithModels(models, buildExcelPrompt(sheet.name, chunks[i]), null, signal, `AI reading sheet "${sheet.name}"${part}`);
+                const parsed = normalizeAiStudents(parseAIResponse(rawText), sheet.name, state.defaultSection);
+                found.push(...parsed.students);
+                outOfRange += parsed.outOfRange;
+            }
+            out.students.push(...found);
+            out.outOfRange += outOfRange;
+            out.readSheets.push(sheet.name);
+        } catch (err) {
+            if (err.name === 'AbortError') throw err;
+            console.warn(`AI could not read sheet ${sheet.name}:`, err);
+            out.students.push(...sheet.fallback);
+            out.failedSheets.push(sheet.name);
+        }
+    }
+    return out;
 }
 
 function isPdf(file) {
@@ -867,10 +928,10 @@ function applyTransform() {
 async function callGeminiVision(apiKey, modelId, base64Data, mimeType, prompt, signal) {
     const requestBody = {
         contents: [{
-            parts: [
-                { text: prompt },
-                { inlineData: { mimeType, data: base64Data } }
-            ]
+            // Spreadsheet sheets are sent as text only, without an image part.
+            parts: base64Data
+                ? [{ text: prompt }, { inlineData: { mimeType, data: base64Data } }]
+                : [{ text: prompt }]
         }],
         generationConfig: {
             temperature: 0.1,
@@ -962,6 +1023,42 @@ Output ONLY a raw JSON array matching this schema:
 ]
 `;
 
+// Tries the preferred model first, then every other discovered model; remembers the one that works.
+async function generateWithModels(models, prompt, base64Data, signal, label) {
+    let lastError = null;
+    for (const candidate of models) {
+        signal.throwIfAborted();
+        try {
+            showProcessing(true, `${label} with ${candidate.id}...`);
+            const rawText = await callGeminiVision(state.apiKey, candidate.id, base64Data, 'image/jpeg', prompt, signal);
+            if (candidate.id !== state.model) {
+                state.model = candidate.id;
+                localStorage.setItem('gemini_model', candidate.id);
+            }
+            return rawText;
+        } catch (err) {
+            if (err.name === 'AbortError') throw err; // Don't retry cancelled requests
+            lastError = err.message;
+            console.warn(`Model ${candidate.id} failed:`, err.message);
+        }
+    }
+    signal.throwIfAborted();
+    throw new Error(`All models failed. Last error: ${lastError}`);
+}
+
+// Discovers models and puts the user's chosen model first.
+async function prepareModels(signal) {
+    showProcessing(true, 'Discovering available AI models...');
+    const models = await discoverModels(state.apiKey);
+    signal.throwIfAborted();
+    if (!models || models.length === 0) {
+        throw new Error('No Gemini models found for your API key. Please verify your key at https://aistudio.google.com/app/apikey');
+    }
+    syncModelDropdown();
+    const modelId = state.model || models[0].id;
+    return [...models].sort((a, b) => Number(b.id === modelId) - Number(a.id === modelId));
+}
+
 async function processImagesWithAI() {
     if (state.isProcessing) return;
     const pages = state.images.filter(page => page.base64 && !page.scanned);
@@ -972,58 +1069,21 @@ async function processImagesWithAI() {
     showProcessing(true, 'Discovering available AI models...');
     
     try {
-        // Step 1: Discover available models
-        const models = await discoverModels(state.apiKey);
-        signal.throwIfAborted();
-        if (!models || models.length === 0) {
-            throw new Error('No Gemini models found for your API key. Please verify your key at https://aistudio.google.com/app/apikey');
-        }
-        syncModelDropdown();
-        
-        // Step 2: Pick the best model (user's chosen model, or auto-discovered best)
-        const modelId = state.model || models[0].id;
-        console.log('Using model:', modelId);
-        
-        models.sort((a, b) => Number(b.id === modelId) - Number(a.id === modelId));
+        const models = await prepareModels(signal);
         
         for (let i = 0; i < pages.length; i++) {
             if (signal.aborted) break;
             
             const img = pages[i];
-            showProcessing(true, `Scanning page ${i + 1} of ${pages.length} with ${modelId}...`);
-            
             const base64Data = img.base64.split(',')[1];
-            const mimeType = 'image/jpeg'; // Always JPEG after canvas compression
-            
-            // Try current model, if it fails try the next discovered model
-            let rawText = null;
-            let lastError = null;
-            
-            for (const candidate of models) {
-                if (signal.aborted) break;
-                try {
-                    showProcessing(true, `Reading page ${i + 1} with ${candidate.id}...`);
-                    const hint = img.classOverride || img.classHint;
-                    const prompt = OCR_PROMPT + (hint ? `\nClass hint for this page: ${hint}. Use this if the page has no readable class heading; preserve explicit different headings on mixed-class pages.` : '');
-                    rawText = await callGeminiVision(state.apiKey, candidate.id, base64Data, mimeType, prompt, signal);
-                    
-                    // Success! Update state to remember this working model
-                    if (candidate.id !== state.model) {
-                        state.model = candidate.id;
-                        localStorage.setItem('gemini_model', candidate.id);
-                    }
-                    break;
-                } catch (err) {
-                    if (err.name === 'AbortError') throw err; // Don't retry cancelled requests
-                    lastError = err.message;
-                    console.warn(`Model ${candidate.id} failed:`, err.message);
-                }
-            }
-            
-            if (signal.aborted) break;
-            
-            if (!rawText) {
-                throw new Error(`All models failed for page ${i + 1}. Last error: ${lastError}`);
+            const hint = img.classOverride || img.classHint;
+            const prompt = OCR_PROMPT + (hint ? `\nClass hint for this page: ${hint}. Use this if the page has no readable class heading; preserve explicit different headings on mixed-class pages.` : '');
+            let rawText;
+            try {
+                rawText = await generateWithModels(models, prompt, base64Data, signal, `Reading page ${i + 1} of ${pages.length}`);
+            } catch (err) {
+                if (err.name === 'AbortError') throw err;
+                throw new Error(`Could not read page ${i + 1}. ${err.message}`);
             }
             
             const parsedArray = parseAIResponse(rawText);

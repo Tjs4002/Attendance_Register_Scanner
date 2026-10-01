@@ -162,3 +162,43 @@ test('parseDobCell and parseClassCell handle common school formats', () => {
     assert.deepEqual(c.map(x => x.cls), [6, 6, 7, 9, 8, 10, 6]);
     assert.equal(c[4].section, 'B');
 });
+
+test('excel headers: "Student Full Name" is a full-name column, not a surname column', () => {
+    const { context, run } = app();
+    const cases = { 'Student Full Name': 'full', 'Full Name': 'full', 'Name of Student': 'full', 'Surname': 'last', 'Last Name *': 'last',
+        'First Name *': 'first', 'FName': 'first', 'LName': 'last', "Father's Name": 'middle', 'Sr No': 'roll', 'D.O.B.': 'dob' };
+    for (const [header, role] of Object.entries(cases)) {
+        context.header = header;
+        assert.equal(run('detectColumn(header)'), role, header);
+    }
+});
+
+test('excel AI fallback: Marathi detection, chunking, output cleanup and duplicates', () => {
+    const { run } = app();
+    const r = JSON.parse(run(`JSON.stringify({
+        marathi: hasMarathiNames([{ firstName: 'वेदिका', lastName: 'नेहारे' }, { firstName: 'Amit', lastName: 'Kale' }]),
+        english: hasMarathiNames([{ firstName: 'Amit', lastName: 'Kale' }]),
+        chunks: sheetCsvChunks(Array.from({ length: 170 }, (_, i) => 'row' + i).join(String.fromCharCode(10))).map(c => [c.context.split(String.fromCharCode(10))[0], c.rows.split(String.fromCharCode(10)).length]),
+        ai: normalizeAiStudents([
+            { firstName: 'Ku. VEDIKA', fatherName: 'Rajkumar', lastName: 'Nehare', studentClass: 'VI', section: '', dob: '30/03/2014', rollNumber: 2 },
+            { firstName: 'Tom', lastName: 'Y', studentClass: '4' },
+            { firstName: '', lastName: 'Nobody', studentClass: '7' },
+            'junk'
+        ], 'Std 8 B', 'A'),
+        noClass: normalizeAiStudents([{ firstName: 'Riya', lastName: 'Shah', studentClass: '' }], 'Std 8 B', 'A').students[0].studentClass,
+        dupes: finalizeRoster([
+            { firstName: 'A', lastName: 'B', dob: '2014-01-01', studentClass: '6', section: 'A', rollNumber: '' },
+            { firstName: 'a', lastName: 'b', dob: '2014-01-01', studentClass: '6', section: 'A', rollNumber: '' },
+            { firstName: 'A', lastName: 'B', dob: '', studentClass: '6', section: 'A', rollNumber: '' }
+        ]).duplicates
+    })`));
+    assert.equal(r.marathi, true);
+    assert.equal(r.english, false);
+    assert.deepEqual(r.chunks, [['', 80], ['row0', 80], ['row0', 10]]);
+    assert.equal(r.ai.students.length, 1);
+    const s = r.ai.students[0];
+    assert.deepEqual([s.firstName, s.fatherName, s.lastName, s.studentClass, s.section, s.dob, s.rollNumber], ['Vedika', 'Rajkumar', 'Nehare', '6', 'A', '2014-03-30', '2']);
+    assert.equal(r.ai.outOfRange, 1);
+    assert.equal(r.noClass, '8');
+    assert.equal(r.dupes, 1);
+});

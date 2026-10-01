@@ -28,9 +28,9 @@ function detectColumn(header) {
     const h = compactHeader(header);
     if (!h) return null;
     if (/mother|आई/.test(h)) return null;
-    if (/father|middle|guardian|parent|mname|वडील|पित्याचे/.test(h)) return 'middle';
-    if (/first|given|fname/.test(h)) return 'first';
-    if (/last|sur|family|lname|आडनाव/.test(h)) return 'last';
+    if (/father|middle|guardian|parent|^mname$|वडील|पित्याचे/.test(h)) return 'middle';
+    if (/first|given|^fname$/.test(h)) return 'first';
+    if (/last|surname|^sur$|family|^lname$|आडनाव/.test(h)) return 'last';
     if (/dob|birth|जन्म/.test(h)) return 'dob';
     if (/section|division|^div|^sec$|तुकडी/.test(h)) return 'section';
     if (/class|^std|standard|grade|वर्ग|इयत्ता/.test(h) && !/teacher/.test(h)) return 'class';
@@ -207,30 +207,126 @@ function sortRoster(students) {
         text(a.firstName, b.firstName) || text(a.lastName, b.lastName));
 }
 
+const DEVANAGARI = /[ऀ-ॿ]/;
+
+// Names written in Marathi need AI transliteration before they fit the English template.
+function hasMarathiNames(students) {
+    const marathi = students.filter(s => DEVANAGARI.test(s.firstName + s.lastName)).length;
+    return marathi > 0 && marathi >= students.length / 2;
+}
+
+// Same child listed on two sheets of one workbook is imported once; result is sorted.
+function finalizeRoster(students) {
+    const seen = new Set();
+    const kept = [];
+    let duplicates = 0;
+    for (const student of students) {
+        const key = student.dob && [student.firstName, student.lastName, student.dob, student.studentClass].join('|').toLowerCase();
+        if (key && seen.has(key)) { duplicates++; continue; }
+        if (key) seen.add(key);
+        kept.push(student);
+    }
+    return { students: sortRoster(kept), duplicates };
+}
+
 /**
- * Reads a workbook file, merges all its sheets and returns
- * { students, sheets, outOfRange, duplicates, skippedSheets }.
+ * Reads a workbook file and returns
+ * { students, sheets, outOfRange, skippedSheets, aiSheets }.
+ * aiSheets lists sheets the column reader could not handle (unrecognised layout or
+ * Marathi names) as { name, reason, csv, fallback } so the caller can send them to AI.
+ * Call finalizeRoster() on the combined students afterwards.
  */
 async function importExcelFile(file, defaultSection = 'A') {
     if (typeof XLSX === 'undefined') throw new Error('Excel reader could not load. Check your internet connection and retry.');
     if (file.size > 20 * 1024 * 1024) throw new Error('Spreadsheets must be smaller than 20 MB.');
     const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
-    const result = { students: [], sheets: workbook.SheetNames.length, outOfRange: 0, duplicates: 0, skippedSheets: [] };
-    const seen = new Set();
+    const result = { students: [], sheets: workbook.SheetNames.length, outOfRange: 0, skippedSheets: [], aiSheets: [] };
 
     for (const sheetName of workbook.SheetNames) {
-        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, raw: true, defval: '' });
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
         const parsed = studentsFromSheet(rows, sheetName, defaultSection);
-        if (parsed.skipped) { result.skippedSheets.push(sheetName); continue; }
-        result.outOfRange += parsed.outOfRange;
-        for (const student of parsed.students) {
-            // Same child listed on two sheets of one workbook is imported once.
-            const key = student.dob && [student.firstName, student.lastName, student.dob, student.studentClass].join('|').toLowerCase();
-            if (key && seen.has(key)) { result.duplicates++; continue; }
-            if (key) seen.add(key);
-            result.students.push(student);
+        const marathi = !parsed.skipped && hasMarathiNames(parsed.students);
+        if (parsed.skipped || marathi) {
+            const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false, dateNF: 'yyyy-mm-dd' }).trim();
+            // Sheets with fewer than two non-empty lines hold no roster worth an AI call.
+            if (csv.split('\n').filter(line => line.replace(/,/g, '').trim()).length >= 2) {
+                result.aiSheets.push({ name: sheetName, reason: marathi ? 'marathi' : 'layout', csv, fallback: parsed.students || [] });
+                if (marathi) result.outOfRange += parsed.outOfRange;
+                continue;
+            }
+            result.skippedSheets.push(sheetName);
+            continue;
         }
+        result.outOfRange += parsed.outOfRange;
+        result.students.push(...parsed.students);
     }
-    sortRoster(result.students);
     return result;
+}
+
+const AI_CHUNK_ROWS = 80;
+
+// Splits a sheet's CSV into prompt-sized chunks; every chunk repeats the first lines
+// so the model always sees the column headings.
+function sheetCsvChunks(csv) {
+    const lines = csv.split('\n');
+    const head = lines.slice(0, Math.min(6, lines.length));
+    const chunks = [];
+    for (let start = 0; start < lines.length; start += AI_CHUNK_ROWS) {
+        chunks.push({ context: start === 0 ? '' : head.join('\n'), rows: lines.slice(start, start + AI_CHUNK_ROWS).join('\n') });
+    }
+    return chunks;
+}
+
+function buildExcelPrompt(sheetName, chunk) {
+    return `You are reading one sheet of a school's student list spreadsheet (Maharashtra, India). Sheet name: "${sheetName}".
+The data below is CSV. Columns may be in any order, in English or Marathi, and the sheet may contain titles, totals or other non-student rows.
+
+Extract every student and return ONLY a raw JSON array, no commentary:
+[{"firstName": "Vedika", "fatherName": "Rajkumar", "lastName": "Nehare", "studentClass": "6", "section": "A", "dob": "2014-03-30", "rollNumber": "1"}]
+
+Rules:
+1. firstName is the child's own given name, lastName is the surname/family name. Put any father's or middle name in fatherName, never in firstName or lastName. Indian registers often write "Surname Firstname Fathername"; use the column headings and common name knowledge to decide the order.
+2. Transliterate Marathi/Devanagari names into natural English spelling (e.g. 'वेदिका' -> 'Vedika', 'नेहारे' -> 'Nehare'). Remove prefixes such as कु., Kum., Ku., Master, Shri.
+3. studentClass is a number 1-12. Read it from a class/standard/इयत्ता column, a class heading inside the sheet, or the sheet name. Convert Roman numerals and Marathi numerals (६ = 6). Leave it "" if unknown; do not guess.
+4. dob must be YYYY-MM-DD (dates in this sheet are day/month/year unless the year comes first). Leave it "" if the sheet has no birthdate for that student; do NOT invent one.
+5. section is the division letter if present, otherwise "". rollNumber is the roll or serial number if present, otherwise "".
+6. Skip heading rows, totals, blank rows and rows that are not students. Return [] if there are no students.
+${chunk.context ? `\nFirst lines of the sheet, for column context only (do NOT extract students from these):\n${chunk.context}\n` : ''}
+CSV rows to extract:
+${chunk.rows}`;
+}
+
+// Cleans AI output into the same student shape the column reader produces (classes 6-10 only).
+function normalizeAiStudents(items, sheetName, defaultSection) {
+    if (!Array.isArray(items)) throw new Error('AI did not return a student list.');
+    const sheetClass = parseClassFromSheetName(sheetName);
+    const students = [];
+    let outOfRange = 0;
+    for (const item of items) {
+        if (!item || typeof item !== 'object') continue;
+        const name = splitStudentName({ first: item.firstName, middle: item.fatherName, last: item.lastName });
+        if (!name.firstName) continue;
+        const classInfo = parseClassCell(item.studentClass) || sheetClass;
+        const cls = classInfo ? classInfo.cls : null;
+        if (cls !== null && (cls < EXCEL_MIN_CLASS || cls > EXCEL_MAX_CLASS)) { outOfRange++; continue; }
+        const section = excelText(item.section).toUpperCase().slice(0, 2) || classInfo?.section || defaultSection;
+        students.push({
+            id: `excel_${crypto.randomUUID()}`,
+            firstName: name.firstName,
+            fatherName: name.fatherName,
+            lastName: name.lastName,
+            marathiName: '',
+            dob: parseDobCell(item.dob),
+            studentClass: cls === null ? '' : String(cls),
+            section,
+            rollNumber: excelText(item.rollNumber),
+            admNo: '',
+            category: '',
+            aadhaar: '',
+            isStruckOut: false,
+            imageSource: sheetName
+        });
+    }
+    return { students, outOfRange };
 }
