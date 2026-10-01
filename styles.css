@@ -321,3 +321,175 @@ html .border-t-teal-700 { border-top-color: var(--primary); }
   .upload-zone { padding: 28px 18px; }
   .register-drawing { max-width: 260px; margin-bottom: 22px; }
 }
+
+/* ==========================================================
+   Refresh: teal accent, softer surfaces, clearer hierarchy.
+   Appended last so it overrides the graphite base above.
+   ========================================================== */
+:root {
+  --primary: #0f766e;
+  --primary-hover: #115e59;
+  --primary-light: #e6f6f3;
+  --primary-border: #99d5cc;
+  --text-main: #1f2933;
+  --text-muted: #5f6b76;
+  --bg-page: #f4f7f8;
+  --bg-card: #ffffff;
+  --border: #dde4e8;
+  --surface-subtle: #eef2f4;
+  --warn-bg: #fff4d6;
+  --warn-border: #e0a526;
+  --shadow-card: 0 1px 2px rgba(16, 36, 48, .05), 0 8px 24px rgba(16, 36, 48, .06);
+}
+:root[data-theme="dark"] {
+  --primary: #5fd0c2;
+  --primary-hover: #8fe3d8;
+  --primary-light: #1d3a37;
+  --primary-border: #2f6b64;
+  --text-main: #eaf0f2;
+  --text-muted: #a3b0b8;
+  --bg-page: #14191c;
+  --bg-card: #1d2428;
+  --border: #323c42;
+  --surface-subtle: #262f34;
+  --button-text: #0d1c1a;
+  --warn-bg: #4a3d1b;
+  --warn-border: #c9921e;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
+}
+body { line-height: 1.5; -webkit-font-smoothing: antialiased; }
+body > header { background: var(--bg-card) !important; box-shadow: 0 1px 0 var(--border); }
+.brand-mark { color: var(--primary); }
+
+/* Cards and panels */
+.queue-card, .download-card, .review-panel, #roster-panel { border-radius: 12px !important; box-shadow: var(--shadow-card); border-color: var(--border) !important; }
+.review-panel { height: min(740px, calc(100vh - 220px)); min-height: 520px; }
+#settings-modal > div, #processing-overlay > div { border-radius: 14px; }
+
+/* Buttons */
+.primary-button, .secondary-button, .quiet-button { border-radius: 8px; transition: background-color .15s, border-color .15s, transform .1s, box-shadow .15s; }
+.primary-button { box-shadow: 0 1px 2px rgba(15, 118, 110, .3); }
+.primary-button:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(15, 118, 110, .28); transform: translateY(-1px); }
+.primary-button:active:not(:disabled) { transform: none; }
+.secondary-button:hover { border-color: var(--primary-border); color: var(--primary); }
+.quiet-button:hover { color: var(--text-main); }
+.compact-select { border-radius: 8px; }
+
+/* Step indicator: numbered pills */
+.steps { gap: 12px; border-bottom: none; margin-bottom: 36px; align-items: center; }
+.steps i { display: block; flex: 0 1 48px; height: 1px; background: var(--border); }
+.step { padding: 6px 14px 6px 6px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-card); margin-bottom: 0; font-weight: 500; }
+.step span { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--surface-subtle); font: 600 11px 'Segoe UI', sans-serif; opacity: 1; }
+.step[aria-current="step"] { border-color: var(--primary); color: var(--text-main); box-shadow: 0 0 0 3px var(--primary-light); }
+.step[aria-current="step"] span { background: var(--primary); color: var(--button-text); }
+.step:not(:disabled):not([aria-current]):hover { border-color: var(--primary-border); }
+
+/* Upload */
+.upload-intro h1 { letter-spacing: -.03em; }
+.upload-zone { border: 2px dashed var(--primary-border); border-radius: 16px; background: var(--bg-card); box-shadow: var(--shadow-card); transition: border-color .15s, background-color .15s, transform .15s; }
+.upload-zone:hover { border-color: var(--primary); }
+.dropzone.dragover { border-color: var(--primary); background: var(--primary-light); transform: scale(1.015); }
+.register-drawing { color: var(--primary); opacity: .75; }
+.register-notes { border-color: var(--border); }
+.page-preview img { border-radius: 8px; }
+.page-preview button { border-radius: 50%; }
+
+/* Review table */
+.roster-table th { background: var(--surface-subtle); text-transform: uppercase; letter-spacing: .05em; font-size: 10.5px; color: var(--text-muted); }
+.roster-table td { border-right: none; padding: 7px 8px; }
+.roster-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-subtle) 45%, transparent); }
+.roster-table tbody tr:hover td { background: var(--primary-light); }
+.roster-table input:hover, .roster-table select:hover { border-color: var(--border); }
+.roster-table input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+.roster-table input.cell-missing { background: var(--warn-bg); border-color: var(--warn-border); }
+.roster-table input.cell-missing::placeholder { color: var(--text-muted); }
+.attention-note { margin: 0; padding: 9px 16px; font-size: 12px; background: var(--warn-bg); border-bottom: 1px solid var(--warn-border); color: var(--text-main); }
+.attention-note.hidden { display: none; }
+#student-count-badge { background: var(--primary-light); color: var(--primary); font-weight: 600; }
+.review-heading h1 { font-size: 32px; }
+
+/* Download */
+.format-button { border-radius: 10px; transition: border-color .15s, background-color .15s, transform .1s; }
+.format-button:hover { transform: translateY(-1px); background: var(--primary-light); }
+.file-badge { border-radius: 6px; background: var(--primary-light); color: var(--primary); border-color: var(--primary-border); }
+.export-count { color: var(--primary); font-family: 'Segoe UI', sans-serif; font-weight: 700; }
+
+/* Toasts, modal */
+.toast { border-radius: 10px; }
+#settings-modal input, #settings-modal select { border-radius: 8px; }
+
+@media (max-width: 640px) {
+  .steps { gap: 6px; }
+  .steps i { flex-basis: 12px; }
+  .step { padding-right: 10px; }
+  .review-panel { height: auto; min-height: 480px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ==========================================================
+   Professional pass: one typeface, calmer headings,
+   tidier table rows and download actions.
+   ========================================================== */
+body, button, input, select, textarea { font-family: 'Inter', 'Noto Sans Devanagari', 'Segoe UI', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss01'; }
+[lang="mr"], .roster-table td div span:first-child { font-family: 'Noto Sans Devanagari', 'Inter', sans-serif; }
+.upload-intro h1, .stage-heading h1, .review-heading h1 { font-family: inherit; font-weight: 700; letter-spacing: -.04em; line-height: 1.05; }
+.upload-intro h1 { font-size: clamp(40px, 4.4vw, 58px); }
+.stage-heading h1 { font-size: 40px; }
+.review-heading h1 { font-size: 30px; letter-spacing: -.03em; }
+.upload-intro .eyebrow { display: inline-block; font-size: 13px; font-weight: 500; color: var(--primary); background: var(--primary-light); border: 1px solid var(--primary-border); padding: 4px 12px; border-radius: 999px; margin-bottom: 26px; }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.upload-intro .eyebrow { text-transform: none; letter-spacing: 0; }
+.intro-description { font-size: 16px; line-height: 1.7; }
+.register-notes dt { text-transform: uppercase; letter-spacing: .06em; font-size: 10.5px; font-weight: 600; }
+.register-notes dd { font-size: 14px; font-weight: 600; }
+.step span { font-family: inherit; }
+.brand-mark { width: 38px; height: 38px; border-radius: 10px; background: var(--primary-light); }
+.brand-mark svg { width: 20px; height: 22px; }
+body > header .font-bold { letter-spacing: -.02em; }
+
+/* Upload card footer */
+.upload-zone h2 { font-size: 21px; font-weight: 650; letter-spacing: -.02em; }
+.format-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 26px; padding: 0; list-style: none; }
+.format-chips li { font-size: 11.5px; font-weight: 500; color: var(--text-muted); background: var(--surface-subtle); border: 1px solid var(--border); border-radius: 999px; padding: 4px 11px; }
+.upload-help { margin-top: 12px; font-size: 12px; color: var(--text-muted); }
+
+/* Table rows: compact, aligned */
+.roster-table td { padding: 6px 8px; }
+.roster-table td > div { flex-wrap: wrap; row-gap: 2px; line-height: 1.4; }
+.roster-table td > div span { white-space: nowrap; }
+.roster-table td > div span.rounded { font-size: 10px; font-weight: 600; letter-spacing: .02em; padding: 1px 6px; border-radius: 999px; }
+.roster-table input { font-variant-numeric: tabular-nums; }
+.roster-table input[type="date"] { font-family: inherit; font-size: 12.5px; width: 128px; }
+.roster-table input.font-mono { font-family: inherit; color: var(--text-muted); font-weight: 500; }
+.roster-table th:first-child, .roster-table td:first-child { padding-left: 16px; }
+.roster-table th:last-child, .roster-table td:last-child { padding-right: 16px; }
+
+/* Class filter chips */
+#class-filter-container button { border-radius: 999px; border: 1px solid var(--border); padding: 5px 12px; }
+#class-filter-container button.bg-teal-700 { border-color: var(--primary); }
+.search-field { border-radius: 8px !important; padding-left: 34px !important; background: var(--bg-page) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2378868f' stroke-width='2' stroke-linecap='round' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 11px center !important; }
+
+/* Download actions */
+.download-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--surface-subtle); color: var(--text-muted); transition: background-color .15s, color .15s; }
+.format-button:hover .download-icon { background: var(--primary); color: var(--button-text); }
+.file-badge { font-weight: 700; letter-spacing: .04em; }
+.file-badge.csv { background: var(--surface-subtle); color: var(--text-muted); border-color: var(--border); }
+.export-count { font-size: 52px; letter-spacing: -.04em; line-height: 1; }
+
+/* Table tone: names read as data, not links */
+.roster-table input.text-teal-900, .roster-table input.text-teal-800 { color: var(--text-main); }
+.roster-table input[type="date"]::-webkit-datetime-edit-text { padding: 0 1px; }
+.roster-table input[type="date"]::-webkit-calendar-picker-indicator { opacity: .45; cursor: pointer; }
+.roster-table input[type="date"]:hover::-webkit-calendar-picker-indicator { opacity: .9; }
+:root[data-theme="dark"] .roster-table input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+.step:disabled { opacity: .6; }
+
+@media (max-width: 640px) {
+  body > header > div { flex-wrap: nowrap !important; gap: 8px !important; }
+  body > header > div > div:last-child { gap: 4px !important; }
+  .theme-label { display: none; }
+  body > header .text-xs.text-slate-500.mt-0\.5 { display: none; }
+  .upload-intro h1 { font-size: 38px; }
+}

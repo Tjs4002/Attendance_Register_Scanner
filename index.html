@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Maha AI Olympiad - Attendance Register to Student Template Generator</title>
   <script src="theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600&display=swap" rel="stylesheet">
   
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -44,7 +47,7 @@
         <span><span class="block font-bold text-base tracking-tight">Maha AI Olympiad</span><span class="block text-xs text-slate-500 mt-0.5">Register Scanner</span></span>
       </div>
       <div class="flex items-center gap-3">
-        <label class="text-xs text-slate-500 flex items-center gap-2" for="theme-select">Theme
+        <label class="text-xs text-slate-500 flex items-center gap-2" for="theme-select"><span class="theme-label">Theme</span>
           <select id="theme-select" class="compact-select" aria-label="Color theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
         </label>
         <button id="settings-btn" class="quiet-button">Settings</button>
@@ -59,19 +62,19 @@
       <button data-step="download" class="step" disabled><span>03</span> Download</button>
     </nav>
     <section id="upload-prompt" class="upload-stage">
-      <div class="upload-intro"><p class="eyebrow" lang="mr">विद्यार्थी नोंदवही</p><h1>Start with<br>your register.</h1><p class="intro-description">Upload your pages, check the details, and download your student list.</p><dl class="register-notes"><div><dt>Languages</dt><dd>Marathi &amp; English</dd></div><div><dt>Documents</dt><dd>Handwritten or printed</dd></div></dl><p class="photo-note">A small tip: keep the whole page in the frame, with the names and class heading clearly visible.</p></div>
+      <div class="upload-intro"><p class="eyebrow" lang="mr">विद्यार्थी नोंदवही</p><h1>Start with <br>your register.</h1><p class="intro-description">Upload register photos, a PDF or an Excel sheet. Check the details, then download a ready-to-import student list.</p><dl class="register-notes"><div><dt>Languages</dt><dd>Marathi &amp; English</dd></div><div><dt>Files</dt><dd>Photos, PDF or Excel</dd></div></dl><p class="photo-note">A small tip: keep the whole page in the frame, with the names and class heading clearly visible.</p></div>
       <div id="dropzone" class="dropzone upload-zone bg-white border-slate-300">
         <svg class="register-drawing" viewBox="0 0 360 200" fill="none" aria-hidden="true"><g stroke="currentColor" stroke-width="1"><path d="M180 21C145 8 57 9 15 14v171c53-5 119-4 165 5 46-9 112-10 165-5V14c-42-5-130-6-165 7Z"/><path d="M180 21v169M8 20H5v170c63-3 118-2 175 6 57-8 112-9 175-6V20h-3"/><path d="M22 43h316v130H22ZM52 43v130M228 43v130M285 43v130"/><path d="M22 61h316"/><path d="M22 77h316"/><path d="M22 93h316"/><path d="M22 109h316"/><path d="M22 125h316"/><path d="M22 141h316"/><path d="M22 157h316"/></g><g class="register-title"><text x="28" y="56">अ.क्र.</text><text x="75" y="56">विद्यार्थ्याचे नाव</text><text x="239" y="56">हजेरी</text><text x="303" y="56">शेरा</text></g></svg>
         <h2 class="text-xl font-bold">Add your register pages</h2>
-        <p class="text-sm text-slate-500 mt-2 mb-6">Drag photos or a PDF into this area.</p>
+        <p class="text-sm text-slate-500 mt-2 mb-6">Drag photos, a PDF or an Excel file here.</p>
         <div class="flex flex-wrap items-center justify-center gap-3">
           <button id="choose-files-btn" class="primary-button">Choose files</button>
           <button id="take-photo-btn" class="secondary-button">Take photo</button>
         </div>
-        <input id="file-input" type="file" multiple accept="image/*,application/pdf,.pdf" class="hidden">
+        <input id="file-input" type="file" multiple accept="image/*,application/pdf,.pdf,.xlsx,.xls,.xlsm,.csv" class="hidden">
         <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden">
-        <p class="text-xs text-slate-400 mt-6">JPG, PNG, WebP or PDF</p>
-        <p class="text-xs text-slate-400 mt-2">Up to 50 MB and 100 pages per PDF</p>
+        <ul class="format-chips" aria-label="Supported files"><li>JPG · PNG · WebP</li><li>PDF up to 100 pages</li><li>Excel · CSV</li></ul>
+        <p class="upload-help">Excel sheets are merged, limited to classes 6–10, and fathers' names are removed.</p>
       </div>
       <div id="upload-queue" class="hidden queue-card bg-white border border-slate-200">
         <div class="flex items-center justify-between gap-3 mb-4"><h2 id="queue-count" class="font-semibold"></h2><span class="text-xs text-slate-500">Ready to scan</span></div>
@@ -85,7 +88,7 @@
       <div class="review-heading"><div><p class="eyebrow">Review your register</p><h1>A second look.</h1><p class="text-sm text-slate-500 mt-2">Compare with the original. Click any student detail to edit it.</p></div><div class="flex gap-2"><button id="header-upload-btn" class="secondary-button">Add pages</button><button id="go-download-btn" class="primary-button">Download →</button></div></div>
       <div id="workspace" class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
       <!-- ================= LEFT: IMAGE VIEWER ================= -->
-      <div class="lg:col-span-5 min-w-0 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col review-panel overflow-hidden">
+      <div id="viewer-panel" class="lg:col-span-5 min-w-0 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col review-panel overflow-hidden">
         <!-- Viewer Header -->
         <div class="p-3.5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-2">
           <div class="flex-1 min-w-0 flex items-center gap-2">
@@ -150,7 +153,7 @@
       </div>
 
 
-        <div class="lg:col-span-7 min-w-0 bg-white rounded-2xl border border-slate-200 flex flex-col review-panel">
+        <div id="roster-panel" class="lg:col-span-7 min-w-0 bg-white rounded-2xl border border-slate-200 flex flex-col review-panel">
           <div class="p-4 border-b border-slate-200 space-y-3">
             <div class="flex items-center justify-between gap-3"><h2 class="font-bold">Student list <span id="student-count-badge" class="ml-2 text-xs text-teal-800 bg-teal-50 rounded-full px-2 py-1">0 Students</span></h2><button id="add-student-btn" class="quiet-button">+ Add student</button></div>
             <div class="flex flex-wrap items-center gap-3"><input id="search-input" type="search" aria-label="Search students" placeholder="Search students…" class="search-field bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm"><div id="class-filter-container" class="flex flex-wrap gap-1"></div></div>
@@ -165,6 +168,7 @@
               </div>
             </details>
           </div>
+          <p id="attention-note" class="attention-note hidden" role="status"></p>
           <div class="flex-1 overflow-auto"><table class="roster-table w-full text-left"><thead><tr><th>Roll</th><th>First name</th><th>Last name</th><th>Date of birth</th><th>Class</th><th>Section</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="roster-tbody"></tbody></table></div>
           <div class="p-3 border-t border-slate-200 text-xs text-slate-500">Edits are included in your download.</div>
         </div>
@@ -175,8 +179,8 @@
       <div class="download-card bg-white border border-slate-200">
         <div class="export-summary"><span id="download-count" class="export-count">0</span><div><strong>students included</strong><p id="download-pages" class="text-sm text-slate-500 mt-1"></p></div></div>
         <p class="text-xs text-slate-500 mb-6">Includes the full student list, including rows hidden by search or class filters.</p>
-        <button id="export-xlsx-btn" class="format-button"><span class="file-badge">XLS</span><span class="flex-1 text-left"><strong>Excel spreadsheet</strong><small>Student import template · .xlsx</small></span><span aria-hidden="true">↓</span></button>
-        <button id="export-csv-btn" class="format-button"><span class="file-badge csv">CSV</span><span class="flex-1 text-left"><strong>CSV file</strong><small>For spreadsheets and other apps · .csv</small></span><span aria-hidden="true">↓</span></button>
+        <button id="export-xlsx-btn" class="format-button"><span class="file-badge">XLS</span><span class="flex-1 text-left"><strong>Excel spreadsheet</strong><small>Student import template · .xlsx</small></span><span class="download-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m0 0-5-5m5 5 5-5M5 20h14"/></svg></span></button>
+        <button id="export-csv-btn" class="format-button"><span class="file-badge csv">CSV</span><span class="flex-1 text-left"><strong>CSV file</strong><small>For spreadsheets and other apps · .csv</small></span><span class="download-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m0 0-5-5m5 5 5-5M5 20h14"/></svg></span></button>
       </div>
       <button id="back-review-btn" class="quiet-button mt-5">← Back to review</button>
     </section>
@@ -251,5 +255,6 @@
   <!-- Load Sample Data and Main Application -->
   <script src="sample-data.js"></script>
   <script src="app.js"></script>
+  <script src="excel-import.js"></script>
 </body>
 </html>

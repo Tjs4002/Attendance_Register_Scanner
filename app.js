@@ -23,7 +23,8 @@ const state = {
     isProcessing: false,
     step: 'upload',
     scanRequested: false,
-    
+    spreadsheetCount: 0,
+
     // Zoom state
     zoomScale: 1,
     zoomRotate: 0,
@@ -233,6 +234,7 @@ function setupEventListeners() {
                 state.searchQuery = '';
                 elements.searchInput.value = '';
                 state.scanRequested = false;
+                state.spreadsheetCount = 0;
                 document.querySelector('.app-menu').open = false;
                 elements.viewerImage.src = '';
                 elements.imageSelector.innerHTML = '';
@@ -587,8 +589,10 @@ async function handleFiles(files) {
         showToast('Please wait for the current import to finish.', 'warning');
         return;
     }
-    const accepted = files.filter(f => f.type.startsWith('image/') || isPdf(f));
-    if (accepted.length !== files.length) showToast('Only images and PDF documents are supported.', 'warning');
+    const spreadsheets = files.filter(isExcelFile);
+    const accepted = files.filter(f => !isExcelFile(f) && (f.type.startsWith('image/') || isPdf(f)));
+    if (accepted.length + spreadsheets.length !== files.length) showToast('Only images, PDF documents and Excel/CSV files are supported.', 'warning');
+    if (spreadsheets.length) await importSpreadsheets(spreadsheets);
     if (!accepted.length) return;
     state.step = 'upload';
     const controller = new AbortController();
@@ -620,6 +624,41 @@ async function handleFiles(files) {
         updateViewMode();
     }
     // Scanning starts only after the user has reviewed their uploaded pages.
+}
+
+// Excel/CSV files skip AI scanning: rows are read directly into the roster.
+async function importSpreadsheets(files) {
+    showProcessing(true, 'Reading spreadsheet...');
+    try {
+        for (const file of files) {
+            try {
+                const result = await importExcelFile(file, state.defaultSection);
+                state.students.push(...result.students);
+                state.spreadsheetCount++;
+                const notes = [];
+                if (result.sheets > 1) notes.push(`${result.sheets} sheets combined`);
+                if (result.outOfRange) notes.push(`${result.outOfRange} outside classes 6-10 left out`);
+                if (result.duplicates) notes.push(`${result.duplicates} duplicate(s) skipped`);
+                if (result.skippedSheets.length) notes.push(`ignored sheet(s) without student names: ${result.skippedSheets.join(', ')}`);
+                if (result.students.length) showToast(`${file.name}: ${result.students.length} students imported${notes.length ? ' (' + notes.join('; ') + ')' : ''}.`, 'success');
+                else showToast(`${file.name}: no class 6-10 students found${notes.length ? ' (' + notes.join('; ') + ')' : ''}. Check that the sheet has a name column.`, 'warning');
+            } catch (err) {
+                showToast(`Could not open ${file.name}: ${err.message}`, 'error');
+            }
+        }
+    } finally {
+        elements.fileInput.value = '';
+        showProcessing(false);
+    }
+    if (!state.students.length) return;
+    state.step = 'review';
+    recalculateRollNumbers();
+    renderClassFilters();
+    renderRosterTable();
+    updateViewMode();
+    const missingClass = state.students.filter(student => !student.studentClass).length;
+    if (missingClass) showToast(`${missingClass} student(s) have no class in the spreadsheet. Set it with “Class for selected class filter”.`, 'warning');
+    window.scrollTo({ top: 0 });
 }
 
 function isPdf(file) {
@@ -1131,6 +1170,10 @@ function createFilterButton(label, value, count) {
     return btn;
 }
 
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
 // Render the Main Roster Table
 function renderRosterTable() {
     updateWorkflowControls();
@@ -1155,6 +1198,12 @@ function renderRosterTable() {
     });
     
     elements.studentCountBadge.textContent = `${filtered.length} Student${filtered.length !== 1 ? 's' : ''}`;
+    const attention = state.students.filter(s => !s.studentClass || !s.lastName || !s.dob).length;
+    const note = document.getElementById('attention-note');
+    if (note) {
+        note.textContent = attention ? `${attention} student${attention === 1 ? '' : 's'} need a quick look: highlighted cells are missing a class, last name or birthdate.` : '';
+        note.classList.toggle('hidden', !attention);
+    }
     
     if (filtered.length === 0) {
         tbody.innerHTML = `
@@ -1178,39 +1227,45 @@ function renderRosterTable() {
             ? `${student.firstName} ${student.fatherName}`.trim() 
             : student.firstName;
             
+        const missingClass = !student.studentClass;
+        const missingLast = !student.lastName;
+        const missingDob = !student.dob;
+        if (missingClass || missingLast) tr.classList.add('row-warn');
+        const id = escapeHtml(student.id);
+
         tr.innerHTML = `
             <td class="w-16 text-center font-mono font-medium text-slate-600">
-                <input type="text" value="${student.rollNumber || ''}" class="text-center w-12 font-mono" 
-                       data-field="rollNumber" data-id="${student.id}" />
+                <input type="text" value="${escapeHtml(student.rollNumber)}" class="text-center w-12 font-mono" aria-label="Roll number"
+                       data-field="rollNumber" data-id="${id}" />
             </td>
             <td class="font-medium text-slate-900">
-                <input type="text" value="${effectiveFirstName}" class="w-full font-semibold text-teal-900" 
-                       data-field="firstName" data-id="${student.id}" />
+                <input type="text" value="${escapeHtml(effectiveFirstName)}" class="w-full font-semibold text-teal-900" aria-label="First name"
+                       data-field="firstName" data-id="${id}" />
                 <div class="text-[11px] text-slate-400 px-1 font-normal flex items-center gap-1.5 mt-0.5">
-                    <span>${student.marathiName || '—'}</span>
-                    ${student.admNo ? `<span class="bg-slate-100 text-slate-500 rounded px-1">Adm: ${student.admNo}</span>` : ''}
-                    ${student.category ? `<span class="bg-teal-50 text-teal-700 rounded px-1">${student.category}</span>` : ''}
+                    ${student.marathiName ? `<span>${escapeHtml(student.marathiName)}</span>` : ''}
+                    ${student.admNo ? `<span class="bg-slate-100 text-slate-500 rounded px-1">Adm: ${escapeHtml(student.admNo)}</span>` : ''}
+                    ${student.category ? `<span class="bg-teal-50 text-teal-700 rounded px-1">${escapeHtml(student.category)}</span>` : ''}
                 </div>
             </td>
             <td class="font-medium text-slate-900">
-                <input type="text" value="${student.lastName || ''}" class="w-full" 
-                       data-field="lastName" data-id="${student.id}" />
+                <input type="text" value="${escapeHtml(student.lastName)}" class="w-full ${missingLast ? 'cell-missing' : ''}" aria-label="Last name" placeholder="Last name"
+                       data-field="lastName" data-id="${id}" />
             </td>
             <td class="w-32 text-center">
-                <input type="date" value="${student.dob || ''}" class="text-center font-mono text-xs w-28" 
-                       data-field="dob" data-id="${student.id}" />
+                <input type="date" value="${escapeHtml(student.dob)}" class="text-center font-mono text-xs w-28 ${missingDob ? 'cell-missing' : ''}" aria-label="Date of birth"
+                       data-field="dob" data-id="${id}" />
             </td>
             <td class="w-20 text-center">
-                <input type="text" value="${student.studentClass || ''}" class="text-center w-12 font-semibold" 
-                       data-field="studentClass" data-id="${student.id}" />
+                <input type="text" value="${escapeHtml(student.studentClass)}" class="text-center w-12 font-semibold ${missingClass ? 'cell-missing' : ''}" aria-label="Class" placeholder="?"
+                       data-field="studentClass" data-id="${id}" />
             </td>
             <td class="w-16 text-center">
-                <input type="text" value="${student.section || 'A'}" class="text-center w-10 uppercase font-semibold text-teal-800" 
-                       data-field="section" data-id="${student.id}" />
+                <input type="text" value="${escapeHtml(student.section || 'A')}" class="text-center w-10 uppercase font-semibold text-teal-800" aria-label="Section"
+                       data-field="section" data-id="${id}" />
             </td>
             <td class="w-16 text-center">
                 <button class="delete-student-btn p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" 
-                        title="Delete Student" data-id="${student.id}">
+                        title="Delete Student" aria-label="Delete student" data-id="${id}">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                     </svg>
@@ -1272,7 +1327,15 @@ function updateWorkflowControls() {
     document.getElementById('go-download-btn').disabled = !state.students.length;
     document.getElementById('return-review-btn').classList.toggle('hidden', !canReview);
     document.getElementById('download-count').textContent = state.students.length;
-    document.getElementById('download-pages').textContent = `From ${state.images.length} register page${state.images.length === 1 ? '' : 's'}`;
+    const sources = [];
+    if (state.images.length) sources.push(`${state.images.length} register page${state.images.length === 1 ? '' : 's'}`);
+    if (state.spreadsheetCount) sources.push(`${state.spreadsheetCount} spreadsheet${state.spreadsheetCount === 1 ? '' : 's'}`);
+    document.getElementById('download-pages').textContent = sources.length ? `From ${sources.join(' and ')}` : '';
+    // Spreadsheet-only imports have no page image to compare against.
+    const hasImages = state.images.length > 0;
+    document.getElementById('viewer-panel').classList.toggle('hidden', !hasImages);
+    document.getElementById('roster-panel').classList.toggle('lg:col-span-12', !hasImages);
+    document.getElementById('roster-panel').classList.toggle('lg:col-span-7', hasImages);
     elements.loadDemoBtn.classList.toggle('hidden', state.images.length > 0 || state.students.length > 0);
     document.getElementById('modal-try-demo-btn').classList.toggle('hidden', state.images.length > 0 || state.students.length > 0);
 }

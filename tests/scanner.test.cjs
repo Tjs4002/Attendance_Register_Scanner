@@ -11,6 +11,7 @@ function app() {
         crypto: webcrypto, AbortController, console: { log() {}, warn() {}, error() {} },
     });
     vm.runInContext(fs.readFileSync('app.js', 'utf8'), context);
+    vm.runInContext(fs.readFileSync('excel-import.js', 'utf8'), context);
     vm.runInContext(`
         const notices = [];
         showToast = (message, type) => notices.push({message, type});
@@ -129,4 +130,35 @@ test('upload prepares previews without starting OCR or replacing edited students
     assert.equal(run('state.images[0].scanned'), false);
     assert.equal(run('state.students[0].firstName'), 'Edited');
     assert.equal(run('state.isProcessing'), false);
+});
+
+test('excel rows: father name dropped, sheets merged by sheet name, only classes 6-10, sorted', () => {
+    const { run } = app();
+    const out = run(`(() => {
+        const head = ['Sr No', 'Student Name', 'Date of Birth', 'Father Name Extra'];
+        const a = studentsFromSheet([['School X'], [], head,
+            [2, 'KU. SNEHA RAMESH PATIL', '15/03/2012', ''], [1, 'Amit Suresh Kale', '2011-07-04', ''], ['', 'Total', '', '']], 'Class 7', 'A');
+        const b = studentsFromSheet([['First Name', 'Middle Name', 'Surname', 'Std', 'DOB'],
+            ['Riya', 'Mohan', 'Shah', 'VIII', '01-Jan-13'], ['Tom', 'X', 'Y', '3', ''], ['Zed', 'Q', 'W', '11', '']], 'Sheet1', 'A');
+        const c = studentsFromSheet([['Foo']], 'Summary', 'A');
+        const all = sortRoster([...b.students, ...a.students]);
+        return JSON.stringify({ all: all.map(s => [s.firstName, s.fatherName, s.lastName, s.dob, s.studentClass, s.rollNumber]), out: b.outOfRange, skipped: c.skipped });
+    })()`);
+    const r = JSON.parse(out);
+    assert.deepEqual(r.all, [
+        ['Amit', 'Suresh', 'Kale', '2011-07-04', '7', '1'],
+        ['Sneha', 'Ramesh', 'Patil', '2012-03-15', '7', '2'],
+        ['Riya', 'Mohan', 'Shah', '2013-01-01', '8', ''],
+    ]);
+    assert.equal(r.out, 2);
+    assert.ok(r.skipped);
+});
+
+test('parseDobCell and parseClassCell handle common school formats', () => {
+    const { run } = app();
+    const d = JSON.parse(run(`JSON.stringify(['5/9/2012', '2012.09.05', '5 Sep 2012', '05092012', 'junk'].map(parseDobCell))`));
+    assert.deepEqual(d, ['2012-09-05', '2012-09-05', '2012-09-05', '2012-09-05', '']);
+    const c = JSON.parse(run(`JSON.stringify(['6', '6th', 'Class 7', 'IX', '8-B', '10A', 'सहावी'].map(parseClassCell))`));
+    assert.deepEqual(c.map(x => x.cls), [6, 6, 7, 9, 8, 10, 6]);
+    assert.equal(c[4].section, 'B');
 });
