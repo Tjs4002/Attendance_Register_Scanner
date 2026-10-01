@@ -224,23 +224,23 @@ function setupEventListeners() {
     // Reset workspace button
     const resetWorkspaceBtn = document.getElementById('reset-workspace-btn');
     if (resetWorkspaceBtn) {
+        // Resets immediately, without a confirmation prompt.
         resetWorkspaceBtn.addEventListener('click', () => {
-            if (confirm('Clear current data and upload new register images or PDFs?')) {
-                state.students = [];
-                state.images = [];
-                state.activeImageId = null;
-                state.step = 'upload';
-                state.filterClass = 'all';
-                state.searchQuery = '';
-                elements.searchInput.value = '';
-                state.scanRequested = false;
-                state.spreadsheetCount = 0;
-                document.querySelector('.app-menu').open = false;
-                elements.viewerImage.src = '';
-                elements.imageSelector.innerHTML = '';
-                updateViewMode();
-                showToast('Workspace reset. Drop new images or PDFs to begin!', 'info');
-            }
+            state.students = [];
+            state.images = [];
+            state.activeImageId = null;
+            state.step = 'upload';
+            state.filterClass = 'all';
+            state.searchQuery = '';
+            elements.searchInput.value = '';
+            state.scanRequested = false;
+            state.spreadsheetCount = 0;
+            elements.viewerImage.src = '';
+            elements.imageSelector.innerHTML = '';
+            renderClassFilters();
+            updateViewMode();
+            window.scrollTo({ top: 0 });
+            showToast('Started over. Add new register pages or an Excel file to begin.', 'info');
         });
     }
 
@@ -1385,6 +1385,7 @@ function updateWorkflowControls() {
         else button.removeAttribute('aria-current');
     });
     document.getElementById('go-download-btn').disabled = !state.students.length;
+    document.getElementById('reset-workspace-btn').disabled = !state.students.length && !state.images.length;
     document.getElementById('return-review-btn').classList.toggle('hidden', !canReview);
     document.getElementById('download-count').textContent = state.students.length;
     const sources = [];

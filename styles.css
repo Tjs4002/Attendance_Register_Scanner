@@ -212,11 +212,6 @@ body > header { background: var(--bg-page) !important; }
 button:disabled { cursor: not-allowed; opacity: .45; }
 button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 .compact-select { padding: 7px 9px; border: 1px solid var(--border); border-radius: 5px; color: var(--text-main); background: var(--bg-card); font-size: 12px; }
-.app-menu { position: relative; }
-.app-menu summary { list-style: none; cursor: pointer; padding: 8px; color: var(--text-muted); }
-.app-menu summary::-webkit-details-marker { display: none; }
-.menu-panel { position: absolute; right: 0; top: 100%; min-width: 145px; padding: 6px; border-radius: 6px; box-shadow: 0 8px 25px #0001; z-index: 35; }
-.menu-panel button { width: 100%; }
 .steps { display: flex; align-items: stretch; gap: 34px; border-bottom: 1px solid var(--border); margin: 0 0 58px; }
 .step { display: inline-flex; align-items: center; gap: 9px; padding: 0 0 15px; color: var(--text-muted); font-size: 13px; white-space: nowrap; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .step span { font-family: Georgia, serif; font-size: 14px; opacity: .65; }
@@ -493,3 +488,9 @@ body > header .font-bold { letter-spacing: -.02em; }
   body > header .text-xs.text-slate-500.mt-0\.5 { display: none; }
   .upload-intro h1 { font-size: 38px; }
 }
+
+/* Start over: always visible in the header, resets without confirmation */
+.start-over-button { white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--text-main); font-size: 13px; font-weight: 600; cursor: pointer; transition: border-color .15s, color .15s, background-color .15s; }
+.start-over-button:hover:not(:disabled) { border-color: #dc2626; color: #dc2626; background: #fef2f2; }
+:root[data-theme="dark"] .start-over-button:hover:not(:disabled) { border-color: #f87171; color: #fca5a5; background: #3a2222; }
+@media (max-width: 640px) { .start-over-button { padding: 8px 10px; } .start-over-label { display: none; } }
